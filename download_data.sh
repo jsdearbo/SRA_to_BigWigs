@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Determine script location and load shared helpers for logging/config.
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
+# Render CLI help text for end users.
 usage() {
     cat <<'EOF'
 Usage: download_data.sh [options]
@@ -20,11 +22,13 @@ Values fall back to config defaults, then repository defaults.
 EOF
 }
 
+# Capture command-line overrides before loading configs.
 CONFIG_FILE=""
 METADATA_OVERRIDE=""
 OUTPUT_OVERRIDE=""
 DRY_RUN=0
 
+# Parse flags for config, metadata, output, and dry-run mode.
 while (($#)); do
     case "${1}" in
         -c|--config)
@@ -57,12 +61,14 @@ while (($#)); do
     esac
 done
 
+# Load configuration values either from CLI or the default location.
 if [[ -n ${CONFIG_FILE} ]]; then
     load_config "${CONFIG_FILE}"
 else
     load_config "$CONFIG_FILE_DEFAULT"
 fi
 
+# Resolve defaults and overrides for metadata and output directories.
 DEFAULT_METADATA="${PIPELINE_ROOT}/metadata.csv"
 DEFAULT_OUTPUT="${PIPELINE_ROOT}/sra_files"
 
@@ -72,6 +78,7 @@ OUTPUT_INPUT="${OUTPUT_OVERRIDE:-${SRA_OUTPUT_DIR:-$DEFAULT_OUTPUT}}"
 METADATA_FILE=$(resolve_path "${METADATA_INPUT}")
 OUTPUT_DIR=$(resolve_path "${OUTPUT_INPUT}")
 
+# Ensure prerequisites and filesystem layout are ready.
 require_tools prefetch python3
 
 [[ -f ${METADATA_FILE} ]] || die "Metadata file not found: ${METADATA_FILE}"
@@ -80,6 +87,7 @@ ensure_directory "${OUTPUT_DIR}"
 info "Using metadata ${METADATA_FILE}"
 info "Writing SRA files to ${OUTPUT_DIR}"
 
+# Extract required metadata columns via Python for robust CSV parsing.
 read_metadata() {
     python3 - "$METADATA_FILE" <<'PY'
 import csv
@@ -103,6 +111,7 @@ with open(metadata_path, newline="", encoding="utf-8") as handle:
 PY
 }
 
+# Iterate over metadata rows, downloading only missing SRA files.
 while IFS=$'\t' read -r cell_type run_id description; do
     [[ -n ${run_id} ]] || continue
 
@@ -110,7 +119,7 @@ while IFS=$'\t' read -r cell_type run_id description; do
     [[ -z ${description} ]] || info "Desc: ${description}"
 
     target_dir="${OUTPUT_DIR}/${run_id}"
-    target_file="${target_dir}/${run_id}.sra"
+    target_file="${target_dir}/${run_id}.sra}"
     alt_target="${OUTPUT_DIR}/${run_id}.sra"
 
     if [[ -f ${target_file} || -f ${alt_target} ]]; then
@@ -127,4 +136,5 @@ while IFS=$'\t' read -r cell_type run_id description; do
     prefetch --max-size 50G -O "${OUTPUT_DIR}" "${run_id}"
 done < <(read_metadata)
 
+# Summarize the stage once all entries have been processed.
 info "All downloads processed based on ${METADATA_FILE}"
