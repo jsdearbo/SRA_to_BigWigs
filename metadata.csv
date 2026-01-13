@@ -1,6 +1,6 @@
 CellType,RunID,StudyID,Description,SeqType,Year
-T_cells,SRR17143399,SRP349202,Naive CD8 T cells (Replicate 1),PE150,2021
-T_cells,SRR17143398,SRP349202,Naive CD8 T cells (Replicate 2),PE150,2021
+T_cells,SRR17143399,SRP349202,Naive CD4 T cells (Replicate 1),PE150,2021
+T_cells,SRR17143398,SRP349202,Naive CD4 T cells (Replicate 2),PE150,2021
 B_cells,SRR8112348,SRP166465,Follicular B cells (GSM3424067),PE100,2018
 B_cells,SRR8112360,SRP166465,Marginal Zone B cells (GSM3424079),PE100,2018
 B_cells,SRR8112372,SRP166465,Peritoneal B cells (GSM3424091),PE100,2018
