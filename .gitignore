@@ -1,6 +1,9 @@
+# pipeline configuration (keep personal settings local)
+config/pipeline.env
+
 # ignore directories that house large file outputs
-# sra_files
 sra_files/
+results/
 # cell type specific files
 Macrophages/
 T_cells/
