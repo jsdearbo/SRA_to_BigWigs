@@ -1,7 +1,10 @@
 # ignore directories that house large file outputs
 # sra_files
-./sra_files/
+sra_files/
 # cell type specific files
-./Macrophages/
-./T_cells/
-./B_cells/
+Macrophages/
+T_cells/
+B_cells/
+
+# nohup files
+nohup.out
