@@ -1,10 +1,88 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-echo "Step 1: Downloading missing SRA files..."
-bash /mnt/netfiles/jsdearbo/public_data/pipeline_v2/download_data.sh
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-echo "Step 2: Processing datasets..."
-bash /mnt/netfiles/jsdearbo/public_data/pipeline_v2/processing_pipeline.sh
+usage() {
+	cat <<'EOF'
+Usage: launch.sh [options] [-- PROCESS_ARGS...]
+
+Options:
+  -c, --config PATH        Path to pipeline.env configuration file
+  -m, --metadata PATH      Metadata CSV (overrides config for both stages)
+	  --skip-download      Skip the download stage
+	  --skip-process       Skip the processing stage
+  -h, --help               Display this help message
+
+Arguments after "--" are forwarded to processing_pipeline.sh.
+EOF
+}
+
+CONFIG_OVERRIDE=""
+METADATA_OVERRIDE=""
+SKIP_DOWNLOAD=0
+SKIP_PROCESS=0
+declare -a PROCESS_ARGS=()
+
+while (($#)); do
+	case "${1}" in
+		-c|--config)
+			[[ $# -ge 2 ]] || { usage; exit 1; }
+			CONFIG_OVERRIDE=${2}
+			shift 2
+			;;
+		-m|--metadata)
+			[[ $# -ge 2 ]] || { usage; exit 1; }
+			METADATA_OVERRIDE=${2}
+			shift 2
+			;;
+		--skip-download)
+			SKIP_DOWNLOAD=1
+			shift
+			;;
+		--skip-process)
+			SKIP_PROCESS=1
+			shift
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		--)
+			shift
+			PROCESS_ARGS=("${@}")
+			break
+			;;
+		*)
+			usage
+			exit 1
+			;;
+	esac
+done
+
+CONFIG_ARG=()
+if [[ -n ${CONFIG_OVERRIDE} ]]; then
+	CONFIG_ARG=(--config "${CONFIG_OVERRIDE}")
+else
+	DEFAULT_CONFIG="${SCRIPT_DIR}/config/pipeline.env"
+	if [[ -f ${DEFAULT_CONFIG} ]]; then
+		CONFIG_ARG=(--config "${DEFAULT_CONFIG}")
+	fi
+fi
+
+METADATA_ARG=()
+if [[ -n ${METADATA_OVERRIDE} ]]; then
+	METADATA_ARG=(--metadata "${METADATA_OVERRIDE}")
+fi
+
+if (( ! SKIP_DOWNLOAD )); then
+	echo "Step 1: Downloading missing SRA files..."
+	"${SCRIPT_DIR}/download_data.sh" "${CONFIG_ARG[@]}" "${METADATA_ARG[@]}"
+fi
+
+if (( ! SKIP_PROCESS )); then
+	echo "Step 2: Processing datasets..."
+	"${SCRIPT_DIR}/processing_pipeline.sh" "${CONFIG_ARG[@]}" "${METADATA_ARG[@]}" "${PROCESS_ARGS[@]}"
+fi
 
 echo "Pipeline finished successfully!"
