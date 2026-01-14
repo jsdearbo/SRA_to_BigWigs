@@ -5,6 +5,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
+# Print CLI usage information for end users
 usage() {
     cat <<'EOF'
 Usage: processing_pipeline.sh [options]
@@ -30,6 +31,7 @@ Options:
 EOF
 }
 
+# Collect CLI overrides and bookkeeping flags
 CONFIG_FILE=""
 METADATA_OVERRIDE=""
 BASE_OVERRIDE=""
@@ -48,6 +50,7 @@ SKIP_TRIM=0
 SKIP_ALIGN=0
 SKIP_BW=0
 
+# Parse command-line arguments to populate overrides and skip flags
 while (($#)); do
     case "${1}" in
         -c|--config)
@@ -136,12 +139,14 @@ while (($#)); do
     esac
 done
 
+# Load configuration from an explicit file or fall back to the default
 if [[ -n ${CONFIG_FILE} ]]; then
     load_config "${CONFIG_FILE}"
 else
     load_config "$CONFIG_FILE_DEFAULT"
 fi
 
+# Establish default values used when config or CLI omit a setting
 DEFAULT_METADATA="${PIPELINE_ROOT}/metadata.csv"
 DEFAULT_BASE_DIR="${PIPELINE_ROOT}"
 DEFAULT_SRA_DIR="${PIPELINE_ROOT}/sra_files"
@@ -157,6 +162,7 @@ DEFAULT_BW_BIN_SIZE=10
 DEFAULT_BW_NORMALIZATION=CPM
 DEFAULT_JAVA_OPTIONS="-Xmx8G"
 
+# Resolve inputs by applying CLI overrides, config values, or defaults
 METADATA_INPUT="${METADATA_OVERRIDE:-${METADATA_FILE:-$DEFAULT_METADATA}}"
 BASE_INPUT="${BASE_OVERRIDE:-${BASE_DIR:-$DEFAULT_BASE_DIR}}"
 SRA_INPUT="${SRA_OVERRIDE:-${SRA_SOURCE_DIR:-$DEFAULT_SRA_DIR}}"
@@ -175,6 +181,7 @@ JAVA_OPTIONS_VAL="${_JAVA_OPTIONS:-$DEFAULT_JAVA_OPTIONS}"
 
 KEEP_TMP_VAL=${KEEP_TMP_OVERRIDE:-${KEEP_TMP:-0}}
 
+# Convert user inputs into absolute paths and resolvable executables
 METADATA_FILE=$(resolve_path "${METADATA_INPUT}")
 BASE_DIR=$(resolve_path "${BASE_INPUT}")
 SRA_SOURCE_DIR=$(resolve_path "${SRA_INPUT}")
@@ -195,6 +202,7 @@ BW_BIN_SIZE=${BW_BIN_SIZE_VAL}
 BW_NORMALIZATION=${BW_NORMALIZATION_VAL}
 export _JAVA_OPTIONS="${JAVA_OPTIONS_VAL}"
 
+# Confirm required tooling and inputs are ready before proceeding
 require_tools python3
 
 [[ -f ${METADATA_FILE} ]] || die "Metadata file not found: ${METADATA_FILE}"
@@ -202,18 +210,22 @@ require_tools python3
 [[ -d ${STAR_INDEX} ]] || die "STAR index directory not found: ${STAR_INDEX}"
 [[ -f ${ADAPTERS} ]] || die "Adapter FASTA not found: ${ADAPTERS}"
 
+# Expand optional extra argument strings into arrays for downstream commands
 IFS=' ' read -r -a STAR_EXTRA_ARGS_ARR <<< "${STAR_EXTRA_ARGS:-}"
 IFS=' ' read -r -a BAMCOVERAGE_EXTRA_ARGS_ARR <<< "${BAMCOVERAGE_EXTRA_ARGS:-}"
 IFS=' ' read -r -a TRIMMOMATIC_EXTRA_ARGS_ARR <<< "${TRIMMOMATIC_EXTRA_ARGS:-}"
 
+# Create the top-level output directory if it does not exist
 ensure_directory "${BASE_DIR}"
 
+# Log key paths and configuration for debugging and reproducibility
 info "Pipeline root: ${PIPELINE_ROOT}"
 info "Metadata: ${METADATA_FILE}"
 info "Output base: ${BASE_DIR}"
 info "SRA source: ${SRA_SOURCE_DIR}"
 info "STAR index: ${STAR_INDEX}"
 
+# Decide whether to handle a sample based on optional run filters
 should_process_run() {
     local run_id=$1
     if ((${#SAMPLE_FILTER[@]} == 0)); then
@@ -228,6 +240,7 @@ should_process_run() {
     return 1
 }
 
+# Stream metadata rows (cell type, run, description) via Python parsing
 metadata_rows() {
     python3 - "${METADATA_FILE}" <<'PY'
 import csv
@@ -251,16 +264,19 @@ with open(metadata_path, newline="", encoding="utf-8") as handle:
 PY
 }
 
+# Perform all processing steps for a single SRR sample (Main pipeline function)
 process_sample() {
     local cell_type=$1
     local srr=$2
     local description=$3
 
+    # Respect optional --sample filters before doing any work
     should_process_run "${srr}" || {
         info "Skipping ${srr} (not in filter)"
         return 0
     }
 
+    # Create a per-cell-type directory layout for all outputs
     local out_root="${BASE_DIR}/${cell_type:-unspecified}"
     ensure_directory "${out_root}"
     ensure_directory "${out_root}/fastq"
@@ -270,22 +286,26 @@ process_sample() {
     ensure_directory "${out_root}/logs"
     ensure_directory "${out_root}/tmp"
 
+    # Prepare a temporary workspace used by fasterq-dump and STAR
     local sample_tmp="${out_root}/tmp/${srr}"
     ensure_directory "${sample_tmp}"
     ensure_directory "${sample_tmp}/fasterq"
     ensure_directory "${sample_tmp}/star"
 
+    # Conditionally delete temporary directories on exit unless requested otherwise
     if (( KEEP_TMP_VAL )); then
         info "Temporary files retained at ${sample_tmp}"
     else
         trap 'rm -rf "${sample_tmp}"; trap - RETURN' RETURN
     fi
 
+    # Emit a formatted header so logs are easy to scan
     info "=================================================="
     info "Processing: ${srr} (${cell_type:-NA})"
     [[ -z ${description} ]] || info "Desc: ${description}"
     info "=================================================="
 
+    # Generate paired FASTQ files from the SRA archive if needed
     local fq1="${out_root}/fastq/${srr}_1.fastq"
     local fq2="${out_root}/fastq/${srr}_2.fastq"
 
@@ -308,6 +328,7 @@ process_sample() {
         info "[FASTQ] Exists — skipping"
     fi
 
+    # Run Trimmomatic to clean adapters/low-quality bases if outputs are absent
     local trim_fq1="${out_root}/trimmed/${srr}_1_trimmed.fastq"
     local trim_fq2="${out_root}/trimmed/${srr}_2_trimmed.fastq"
 
@@ -329,6 +350,7 @@ process_sample() {
         info "[TRIM] Exists — skipping"
     fi
 
+    # Align trimmed reads with STAR and produce a coordinate-sorted BAM
     local final_bam="${out_root}/bam/${srr}.bam"
 
     if (( SKIP_ALIGN )); then
@@ -359,6 +381,7 @@ process_sample() {
         info "[STAR] BAM exists — skipping"
     fi
 
+    # Convert BAM coverage to a BigWig track when requested
     local bw_out="${out_root}/bw/${srr}.bw"
 
     if (( SKIP_BW )); then
@@ -379,15 +402,19 @@ process_sample() {
         info "[BW] Exists — skipping"
     fi
 
+    # Clean up temporary directories unless the user asked to keep them
     if (( KEEP_TMP_VAL == 0 )); then
         rm -rf "${sample_tmp}"
     fi
 
+    # Mark this run as successfully processed
     info "[DONE] ${srr}"
 }
 
+# Iterate over every metadata entry and process matching samples
 metadata_rows | while IFS=$'\t' read -r cell_type run_id description; do
     process_sample "${cell_type}" "${run_id}" "${description}"
 done
 
+# Report successful completion of all requested tasks
 info "All pipeline tasks complete."
