@@ -2,6 +2,9 @@
 
 Pipeline for downloading public SRA accessions, generating cleaned FASTQ files, aligning with STAR, and producing normalized BigWig coverage tracks. The workflow is driven by a metadata CSV and configurable through a simple environment file so it can be shared with lab members or versioned on GitHub.
 
+# Overview
+![Pipeline overview](images/pipeline_overview.png)
+
 ## Features
 - Single entrypoint with optional stage skipping for incremental runs
 - Configurable paths, tool locations, and resource usage via `config/pipeline.env`
