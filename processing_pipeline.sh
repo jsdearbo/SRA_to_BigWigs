@@ -291,6 +291,8 @@ process_sample() {
     ensure_directory "${sample_tmp}"
     ensure_directory "${sample_tmp}/fasterq"
     ensure_directory "${sample_tmp}/star"
+    # Remove any stale STAR tmp directory so the aligner can recreate it
+    rm -rf "${sample_tmp}/star/tmp"
 
     # Conditionally delete temporary directories on exit unless requested otherwise
     if (( KEEP_TMP_VAL )); then
@@ -358,7 +360,6 @@ process_sample() {
         [[ -f ${final_bam} ]] || die "BAM missing for ${srr} while --skip-align is set"
     elif [[ ! -f ${final_bam} ]]; then
         info "[STAR] Aligning ${srr}"
-        ensure_directory "${sample_tmp}/star/tmp"
         "${STAR_EXEC}" \
             --runThreadN "${ALIGN_THREADS}" \
             --genomeDir "${STAR_INDEX}" \
