@@ -150,10 +150,10 @@ fi
 DEFAULT_METADATA="${PIPELINE_ROOT}/metadata.csv"
 DEFAULT_BASE_DIR="${PIPELINE_ROOT}"
 DEFAULT_SRA_DIR="${PIPELINE_ROOT}/sra_files"
-DEFAULT_STAR_EXEC="/mnt/netfiles/conda_envs/rna-seq/bin/STAR"
-DEFAULT_STAR_INDEX="/mnt/netfiles/genomes/STAR/mm10/star_index"
-DEFAULT_TRIMMOMATIC_EXEC="/mnt/netfiles/conda_envs/rna-seq/bin/trimmomatic"
-DEFAULT_ADAPTERS="/mnt/netfiles/conda_envs/rna-seq/share/trimmomatic/adapters/TruSeq3-PE.fa"
+DEFAULT_STAR_EXEC="STAR"
+DEFAULT_STAR_INDEX=""
+DEFAULT_TRIMMOMATIC_EXEC="trimmomatic"
+DEFAULT_ADAPTERS=""
 DEFAULT_ALIGN_THREADS=6
 DEFAULT_IO_THREADS=4
 DEFAULT_STAR_OVERHANG=100
