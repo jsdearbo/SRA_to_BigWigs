@@ -15,8 +15,8 @@ Usage: launch.sh [options] [-- PROCESS_ARGS...]
 Options:
   -c, --config PATH        Path to pipeline.env configuration file
   -m, --metadata PATH      Metadata CSV (overrides config for both stages)
-	  --skip-download      Skip the download stage
-	  --skip-process       Skip the processing stage
+  --skip-download        Skip the download stage
+  --skip-process         Skip the processing stage
   -h, --help               Display this help message
 
 Arguments after "--" are forwarded to processing_pipeline.sh.
