@@ -2,8 +2,28 @@
 
 Pipeline for downloading public SRA accessions, generating cleaned FASTQ files, aligning with STAR, and producing normalized BigWig coverage tracks. The workflow is driven by a metadata CSV and configurable through a simple environment file so it can be shared with lab members or versioned on GitHub.
 
-# Overview
-![Pipeline overview](images/pipeline_overview.png)
+## Overview
+
+```text
+    launch.sh
+    │
+    ├─ Step 1  download_data.sh
+    │            reads metadata.csv
+    │            └─ prefetch ──► sra_files/{RunID}/{RunID}.sra
+    │
+    └─ Step 2  processing_pipeline.sh  (one pass per RunID in metadata.csv)
+                 │
+                 ├─ fasterq-dump ──► fastq/{srr}_1.fastq
+                 │                   fastq/{srr}_2.fastq
+                 │
+                 ├─ Trimmomatic  ──► trimmed/{srr}_1_trimmed.fastq
+                 │                   trimmed/{srr}_2_trimmed.fastq
+                 │
+                 ├─ STAR         ──► bam/{srr}.bam  bam/{srr}.bam.bai
+                 │                   logs/
+                 │
+                 └─ bamCoverage  ──► bw/{srr}.bw
+```
 
 ## Features
 - Single entrypoint with optional stage skipping for incremental runs
