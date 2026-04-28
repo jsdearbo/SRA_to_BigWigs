@@ -1,0 +1,11 @@
+name: rnaseq_tools
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - sra-tools
+  - star
+  - trimmomatic
+  - samtools
+  - deeptools

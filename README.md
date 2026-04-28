@@ -40,13 +40,19 @@ Pipeline for downloading public SRA accessions, generating cleaned FASTQ files, 
 - deepTools (`bamCoverage`)
 - Python 3.7+
 
-Install these tools in a shared conda environment (recommended) or expose their executables on `PATH`. Absolute paths can be specified in the config file when needed.
+Install via the provided `environment.yml`:
+```bash
+conda env create -f environment.yml
+conda activate rnaseq_tools
+```
+Or expose the executables on `PATH` directly. Absolute paths can be specified in the config file when needed.
 
 ## Repository Layout
 - `download_data.sh` – fetches `.sra` files listed in the metadata
 - `processing_pipeline.sh` – converts SRA to FASTQ, trims, aligns, and emits BAM/BigWig
 - `launch.sh` – convenience wrapper that runs download + processing back-to-back
 - `metadata.csv` – example metadata (CellType, RunID, StudyID, Description, SeqType, Year)
+- `environment.yml` – conda environment definition for all required tools
 - `config/pipeline.env.example` – sample configuration to copy and customize
 - `lib/common.sh` – shared helper functions for logging and path handling
 
@@ -93,8 +99,3 @@ For each `CellType` row in the metadata, the pipeline creates a directory under 
 |----------|-------|-------------|-----|
 
 Additional columns are ignored by the scripts, so you can extend the file with project-specific annotations.
-
-## Version Control Tips
-- Commit `config/pipeline.env.example`, but keep your personalized `config/pipeline.env` out of version control (add it to `.gitignore`).
-- Document environment creation (e.g., `conda env export --from-history > environment.yml`) so lab members can reproduce dependencies.
-- Use branches or pull requests to propose changes to parameters or tool versions and capture the history of updates.
