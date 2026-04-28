@@ -119,7 +119,7 @@ while IFS=$'\t' read -r cell_type run_id description; do
     [[ -z ${description} ]] || info "Desc: ${description}"
 
     target_dir="${OUTPUT_DIR}/${run_id}"
-    target_file="${target_dir}/${run_id}.sra}"
+    target_file="${target_dir}/${run_id}.sra"
     alt_target="${OUTPUT_DIR}/${run_id}.sra"
 
     if [[ -f ${target_file} || -f ${alt_target} ]]; then
