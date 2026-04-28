@@ -403,11 +403,6 @@ process_sample() {
         info "[BW] Exists — skipping"
     fi
 
-    # Clean up temporary directories unless the user asked to keep them
-    if (( KEEP_TMP_VAL == 0 )); then
-        rm -rf "${sample_tmp}"
-    fi
-
     # Mark this run as successfully processed
     info "[DONE] ${srr}"
 }
