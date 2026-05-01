@@ -22,6 +22,7 @@ Options:
   -t, --threads INT           Alignment threads (default 6)
   -i, --io-threads INT        I/O threads for fasterq-dump and bamCoverage (default 4)
       --sample RUN_ID         Restrict processing to specific run ID (repeatable)
+      --single-end            Treat reads as single-end (use only read 1)
       --skip-fastq            Skip FASTQ generation step (requires existing outputs)
       --skip-trim             Skip trimming step
       --skip-align            Skip STAR alignment
@@ -43,6 +44,7 @@ ADAPTERS_OVERRIDE=""
 THREADS_OVERRIDE=""
 IO_THREADS_OVERRIDE=""
 KEEP_TMP_OVERRIDE=""
+SINGLE_END_OVERRIDE=""
 declare -a SAMPLE_FILTER=()
 
 SKIP_FASTQ=0
@@ -108,6 +110,10 @@ while (($#)); do
             SAMPLE_FILTER+=("${2}")
             shift 2
             ;;
+        --single-end)
+            SINGLE_END_OVERRIDE=1
+            shift
+            ;;
         --skip-fastq)
             SKIP_FASTQ=1
             shift
@@ -162,6 +168,7 @@ DEFAULT_BW_BIN_SIZE=10
 DEFAULT_BW_NORMALIZATION=CPM
 DEFAULT_JAVA_OPTIONS="-Xmx8G"
 DEFAULT_TRIM_MINLEN=36
+DEFAULT_SINGLE_END=0
 
 # Resolve inputs by applying CLI overrides, config values, or defaults
 METADATA_INPUT="${METADATA_OVERRIDE:-${METADATA_FILE:-$DEFAULT_METADATA}}"
@@ -180,6 +187,7 @@ BW_BIN_SIZE_VAL="${BW_BIN_SIZE:-$DEFAULT_BW_BIN_SIZE}"
 BW_NORMALIZATION_VAL="${BW_NORMALIZATION:-$DEFAULT_BW_NORMALIZATION}"
 JAVA_OPTIONS_VAL="${_JAVA_OPTIONS:-$DEFAULT_JAVA_OPTIONS}"
 TRIM_MINLEN_VAL="${TRIM_MINLEN:-$DEFAULT_TRIM_MINLEN}"
+SINGLE_END_VAL="${SINGLE_END_OVERRIDE:-${SINGLE_END:-$DEFAULT_SINGLE_END}}"
 
 KEEP_TMP_VAL=${KEEP_TMP_OVERRIDE:-${KEEP_TMP:-0}}
 
@@ -204,6 +212,7 @@ BW_BIN_SIZE=${BW_BIN_SIZE_VAL}
 BW_NORMALIZATION=${BW_NORMALIZATION_VAL}
 export _JAVA_OPTIONS="${JAVA_OPTIONS_VAL}"
 TRIM_MINLEN=${TRIM_MINLEN_VAL}
+SINGLE_END=${SINGLE_END_VAL}
 
 # Confirm required tooling and inputs are ready before proceeding
 require_tools python3
@@ -227,6 +236,7 @@ info "Metadata: ${METADATA_FILE}"
 info "Output base: ${BASE_DIR}"
 info "SRA source: ${SRA_SOURCE_DIR}"
 info "STAR index: ${STAR_INDEX}"
+info "Single-end mode: ${SINGLE_END}"
 
 # Decide whether to handle a sample based on optional run filters
 should_process_run() {
@@ -316,7 +326,11 @@ process_sample() {
 
     if (( SKIP_FASTQ )); then
         info "[FASTQ] Skip requested"
-        [[ -f ${fq1} && -f ${fq2} ]] || die "FASTQ files missing for ${srr} while --skip-fastq is set"
+        if (( SINGLE_END )); then
+            [[ -f ${fq1} ]] || die "FASTQ file missing for ${srr} while --skip-fastq is set"
+        else
+            [[ -f ${fq1} && -f ${fq2} ]] || die "FASTQ files missing for ${srr} while --skip-fastq is set"
+        fi
     elif [[ ! -f ${fq1} || ! -f ${fq2} ]]; then
         info "[FASTQ] Dumping ${srr}"
         local sra_path="${SRA_SOURCE_DIR}/${srr}/${srr}.sra"
@@ -339,17 +353,29 @@ process_sample() {
 
     if (( SKIP_TRIM )); then
         info "[TRIM] Skip requested"
-        [[ -f ${trim_fq1} && -f ${trim_fq2} ]] || die "Trimmed FASTQ files missing for ${srr} while --skip-trim is set"
-    elif [[ ! -f ${trim_fq1} || ! -f ${trim_fq2} ]]; then
+        if (( SINGLE_END )); then
+            [[ -f ${trim_fq1} ]] || die "Trimmed FASTQ missing for ${srr} while --skip-trim is set"
+        else
+            [[ -f ${trim_fq1} && -f ${trim_fq2} ]] || die "Trimmed FASTQ files missing for ${srr} while --skip-trim is set"
+        fi
+    elif [[ ! -f ${trim_fq1} || ( ! -f ${trim_fq2} && ${SINGLE_END} -eq 0 ) ]]; then
         info "[TRIM] Trimming reads"
-        "${TRIMMOMATIC_EXEC}" PE -threads "${ALIGN_THREADS}" \
-            "${fq1}" "${fq2}" \
-            "${trim_fq1}" "${sample_tmp}/1_unpaired.fq" \
-            "${trim_fq2}" "${sample_tmp}/2_unpaired.fq" \
-            ILLUMINACLIP:"${ADAPTERS}":2:30:10 \
-            LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:"${TRIM_MINLEN}" \
-            "${TRIMMOMATIC_EXTRA_ARGS_ARR[@]}"
-        rm -f "${sample_tmp}/"*_unpaired.fq 2>/dev/null || true
+        if (( SINGLE_END )); then
+            "${TRIMMOMATIC_EXEC}" SE -threads "${ALIGN_THREADS}" \
+                "${fq1}" "${trim_fq1}" \
+                ILLUMINACLIP:"${ADAPTERS}":2:30:10 \
+                LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:"${TRIM_MINLEN}" \
+                "${TRIMMOMATIC_EXTRA_ARGS_ARR[@]}"
+        else
+            "${TRIMMOMATIC_EXEC}" PE -threads "${ALIGN_THREADS}" \
+                "${fq1}" "${fq2}" \
+                "${trim_fq1}" "${sample_tmp}/1_unpaired.fq" \
+                "${trim_fq2}" "${sample_tmp}/2_unpaired.fq" \
+                ILLUMINACLIP:"${ADAPTERS}":2:30:10 \
+                LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:"${TRIM_MINLEN}" \
+                "${TRIMMOMATIC_EXTRA_ARGS_ARR[@]}"
+            rm -f "${sample_tmp}/"*_unpaired.fq 2>/dev/null || true
+        fi
         sync
     else
         info "[TRIM] Exists — skipping"
@@ -363,17 +389,31 @@ process_sample() {
         [[ -f ${final_bam} ]] || die "BAM missing for ${srr} while --skip-align is set"
     elif [[ ! -f ${final_bam} ]]; then
         info "[STAR] Aligning ${srr}"
-        "${STAR_EXEC}" \
-            --runThreadN "${ALIGN_THREADS}" \
-            --genomeDir "${STAR_INDEX}" \
-            --readFilesIn "${trim_fq1}" "${trim_fq2}" \
-            --outFileNamePrefix "${sample_tmp}/star/" \
-            --outTmpDir "${sample_tmp}/star/tmp" \
-            --outSAMtype BAM SortedByCoordinate \
-            --sjdbOverhang "${STAR_OVERHANG}" \
-            --outBAMcompression 1 \
-            --outSAMattributes All \
-            "${STAR_EXTRA_ARGS_ARR[@]}"
+        if (( SINGLE_END )); then
+            "${STAR_EXEC}" \
+                --runThreadN "${ALIGN_THREADS}" \
+                --genomeDir "${STAR_INDEX}" \
+                --readFilesIn "${trim_fq1}" \
+                --outFileNamePrefix "${sample_tmp}/star/" \
+                --outTmpDir "${sample_tmp}/star/tmp" \
+                --outSAMtype BAM SortedByCoordinate \
+                --sjdbOverhang "${STAR_OVERHANG}" \
+                --outBAMcompression 1 \
+                --outSAMattributes All \
+                "${STAR_EXTRA_ARGS_ARR[@]}"
+        else
+            "${STAR_EXEC}" \
+                --runThreadN "${ALIGN_THREADS}" \
+                --genomeDir "${STAR_INDEX}" \
+                --readFilesIn "${trim_fq1}" "${trim_fq2}" \
+                --outFileNamePrefix "${sample_tmp}/star/" \
+                --outTmpDir "${sample_tmp}/star/tmp" \
+                --outSAMtype BAM SortedByCoordinate \
+                --sjdbOverhang "${STAR_OVERHANG}" \
+                --outBAMcompression 1 \
+                --outSAMattributes All \
+                "${STAR_EXTRA_ARGS_ARR[@]}"
+        fi
 
         mv "${sample_tmp}/star/Aligned.sortedByCoord.out.bam" "${final_bam}"
         mv "${sample_tmp}/star/Log."* "${out_root}/logs/" 2>/dev/null || true
