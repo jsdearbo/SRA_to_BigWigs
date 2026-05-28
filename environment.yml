@@ -4,8 +4,9 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - sra-tools
-  - star
-  - trimmomatic
-  - samtools
-  - deeptools
+  - python=3.12
+  - sra-tools=3.4.1
+  - star=2.7.11b
+  - trimmomatic=0.40
+  - samtools=1.23.1
+  - deeptools=3.5.6
