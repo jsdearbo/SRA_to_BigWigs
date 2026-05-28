@@ -331,7 +331,7 @@ process_sample() {
         else
             [[ -f ${fq1} && -f ${fq2} ]] || die "FASTQ files missing for ${srr} while --skip-fastq is set"
         fi
-    elif [[ ! -f ${fq1} || ! -f ${fq2} ]]; then
+    elif [[ ! -f ${fq1} || ( ! -f ${fq2} && ${SINGLE_END} -eq 0 ) ]]; then
         info "[FASTQ] Dumping ${srr}"
         local sra_path="${SRA_SOURCE_DIR}/${srr}/${srr}.sra"
         [[ -f ${sra_path} ]] || sra_path="${SRA_SOURCE_DIR}/${srr}.sra"
