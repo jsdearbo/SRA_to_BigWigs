@@ -82,6 +82,7 @@ Stage entrypoints expose more granular controls:
 - Dry-run SRA downloads: `./download_data.sh --dry-run`
 - Limit processing to selected runs: `./processing_pipeline.sh --sample SRR17143399`
 - Skip individual steps (e.g., `--skip-trim`) when intermediates already exist
+- Process single-end libraries: `./processing_pipeline.sh --single-end`
 
 ## Outputs
 For each `CellType` row in the metadata, the pipeline creates a directory under `BASE_DIR` containing:
@@ -99,3 +100,21 @@ For each `CellType` row in the metadata, the pipeline creates a directory under 
 |----------|-------|-------------|-----|
 
 Additional columns are ignored by the scripts, so you can extend the file with project-specific annotations.
+
+## Troubleshooting
+
+**Resuming a partial run:** The pipeline is idempotent — all steps check for existing outputs before running. Simply re-run the same command to pick up where it left off.
+
+**Isolating a single sample:** Use `--sample SRR######` with `processing_pipeline.sh` to process one run at a time. This is useful for debugging or re-running a sample that failed.
+
+**Inspecting failures:** Per-sample logs are written to `results/<CellType>/logs/`. STAR alignment logs (`Log.final.out`) and Trimmomatic output are the first places to look.
+
+**Missing or stale FASTQs:** Pass `--skip-fastq` or `--skip-trim` when intermediates already exist but you want to re-run downstream steps only.
+
+## Testing
+
+A smoke test suite is included that validates config loading, metadata parsing, and CLI flags without requiring any bioinformatics tools:
+
+```bash
+bash tests/test_pipeline.sh
+```
